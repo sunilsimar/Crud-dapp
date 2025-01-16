@@ -2,69 +2,93 @@
 
 use anchor_lang::prelude::*;
 
-declare_id!("coUnmi3oBUtwtd9fjeAvSsJssXh5A5xyPbhpewyzRVF");
+declare_id!("BH86AGjJYPqskQ8cexoNbLPGYXuVhdnhxpNquEk6be2x");
 
 #[program]
 pub mod cruddapp {
     use super::*;
 
-  pub fn close(_ctx: Context<CloseCruddapp>) -> Result<()> {
-    Ok(())
-  }
+    pub fn create_journal_entry(ctx: Context<CreateEntry>, title: String, message: String) -> Result<()> {
+      let journal_entry = &mut ctx.accounts.journal_entry;
+      journal_entry.owner = *ctx.accounts.owner.key;
+      journal_entry.title = title;
+      journal_entry.message = message;
 
-  pub fn decrement(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.cruddapp.count = ctx.accounts.cruddapp.count.checked_sub(1).unwrap();
-    Ok(())
-  }
+      Ok(())
+    }
 
-  pub fn increment(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.cruddapp.count = ctx.accounts.cruddapp.count.checked_add(1).unwrap();
-    Ok(())
-  }
+    pub fn update_journal_entry(ctx: Context<UpdateEntry>, _title: String, message: String) -> Result<()> {
+      let journal_entry = &mut ctx.accounts.journal_entry;
+      journal_entry.message = message;
 
-  pub fn initialize(_ctx: Context<InitializeCruddapp>) -> Result<()> {
-    Ok(())
-  }
+      Ok(())
+    }
 
-  pub fn set(ctx: Context<Update>, value: u8) -> Result<()> {
-    ctx.accounts.cruddapp.count = value.clone();
-    Ok(())
-  }
+    pub fn delete_journal_entry(_ctx: Context<DeleteEntry>, _title: String) -> Result<()> {
+      Ok(())
+    }
 }
 
 #[derive(Accounts)]
-pub struct InitializeCruddapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
+#[instruction(title: String)]
+pub struct CreateEntry<'info> {
   #[account(
-  init,
-  space = 8 + Cruddapp::INIT_SPACE,
-  payer = payer
+    init,
+    seeds = [title.as_bytes(), owner.key().as_ref()],
+    bump,
+    space = 8 + JournalEntryState::INIT_SPACE,
+    payer = owner,
   )]
-  pub cruddapp: Account<'info, Cruddapp>,
+  pub journal_entry: Account<'info, JournalEntryState>,
+
+  #[account(mut)]
+  pub owner: Signer<'info>,
+  
   pub system_program: Program<'info, System>,
 }
-#[derive(Accounts)]
-pub struct CloseCruddapp<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
 
+#[derive(Accounts)]
+#[instruction(title: String)]
+pub struct UpdateEntry<'info> {
   #[account(
-  mut,
-  close = payer, // close account and return lamports to payer
+    mut,
+    seeds = [title.as_bytes(), owner.key().as_ref()],
+    bump,
+    realloc = 8 + JournalEntryState::INIT_SPACE,
+    realloc::payer = owner,
+    realloc::zero = true,
   )]
-  pub cruddapp: Account<'info, Cruddapp>,
+  pub journal_entry: Account<'info, JournalEntryState>,
+
+  #[account(mut)]
+  pub owner: Signer<'info>,
+
+  pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct Update<'info> {
+#[instruction(title: String)]
+pub struct DeleteEntry<'info> {
+  #[account(
+    mut,
+    seeds = [title.as_bytes(), owner.key().as_ref()],
+    bump,
+    close = owner,
+  )]
+  pub journal_entry: Account<'info, JournalEntryState>, 
+
   #[account(mut)]
-  pub cruddapp: Account<'info, Cruddapp>,
+  pub owner: Signer<'info>,
+
+  pub system_program: Program<'info, System>,
 }
 
 #[account]
 #[derive(InitSpace)]
-pub struct Cruddapp {
-  count: u8,
+pub struct JournalEntryState {
+  pub owner: Pubkey,
+  #[max_len(50)]
+  pub title: String,
+  #[max_len(1000)]
+  pub message: String,
 }
